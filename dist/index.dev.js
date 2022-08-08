@@ -457,10 +457,10 @@ var markerClusterer = (function (exports) {
   (shared$3.exports = function (key, value) {
     return store$2[key] || (store$2[key] = value !== undefined ? value : {});
   })('versions', []).push({
-    version: '3.22.8',
+    version: '3.24.1',
     mode: 'global',
     copyright: '© 2014-2022 Denis Pushkarev (zloirock.ru)',
-    license: 'https://github.com/zloirock/core-js/blob/v3.22.8/LICENSE',
+    license: 'https://github.com/zloirock/core-js/blob/v3.24.1/LICENSE',
     source: 'https://github.com/zloirock/core-js'
   });
 
@@ -673,10 +673,10 @@ var markerClusterer = (function (exports) {
   };
 
   var DESCRIPTORS$5 = descriptors;
-  var definePropertyModule$3 = objectDefineProperty;
+  var definePropertyModule$4 = objectDefineProperty;
   var createPropertyDescriptor$1 = createPropertyDescriptor$3;
-  var createNonEnumerableProperty$4 = DESCRIPTORS$5 ? function (object, key, value) {
-    return definePropertyModule$3.f(object, key, createPropertyDescriptor$1(1, value));
+  var createNonEnumerableProperty$3 = DESCRIPTORS$5 ? function (object, key, value) {
+    return definePropertyModule$4.f(object, key, createPropertyDescriptor$1(1, value));
   } : function (object, key, value) {
     object[key] = value;
     return object;
@@ -735,7 +735,7 @@ var markerClusterer = (function (exports) {
   var global$5 = global$d;
   var uncurryThis$c = functionUncurryThis;
   var isObject$3 = isObject$8;
-  var createNonEnumerableProperty$3 = createNonEnumerableProperty$4;
+  var createNonEnumerableProperty$2 = createNonEnumerableProperty$3;
   var hasOwn$4 = hasOwnProperty_1;
   var shared = sharedStore;
   var sharedKey$1 = sharedKey$2;
@@ -788,7 +788,7 @@ var markerClusterer = (function (exports) {
     set = function (it, metadata) {
       if (hasOwn$4(it, STATE)) throw new TypeError$2(OBJECT_ALREADY_INITIALIZED);
       metadata.facade = it;
-      createNonEnumerableProperty$3(it, STATE, metadata);
+      createNonEnumerableProperty$2(it, STATE, metadata);
       return metadata;
     };
 
@@ -838,10 +838,10 @@ var markerClusterer = (function (exports) {
     if (options && options.setter) name = 'set ' + name;
 
     if (!hasOwn$3(value, 'name') || CONFIGURABLE_FUNCTION_NAME && value.name !== name) {
-      defineProperty$3(value, 'name', {
+      if (DESCRIPTORS$3) defineProperty$3(value, 'name', {
         value: name,
         configurable: true
-      });
+      });else value.name = name;
     }
 
     if (CONFIGURABLE_LENGTH && options && hasOwn$3(options, 'arity') && value.length !== options.arity) {
@@ -876,7 +876,7 @@ var markerClusterer = (function (exports) {
   }, 'toString');
 
   var isCallable$5 = isCallable$e;
-  var createNonEnumerableProperty$2 = createNonEnumerableProperty$4;
+  var definePropertyModule$3 = objectDefineProperty;
   var makeBuiltIn = makeBuiltIn$2.exports;
   var defineGlobalProperty$1 = defineGlobalProperty$3;
 
@@ -889,8 +889,18 @@ var markerClusterer = (function (exports) {
     if (options.global) {
       if (simple) O[key] = value;else defineGlobalProperty$1(key, value);
     } else {
-      if (!options.unsafe) delete O[key];else if (O[key]) simple = true;
-      if (simple) O[key] = value;else createNonEnumerableProperty$2(O, key, value);
+      try {
+        if (!options.unsafe) delete O[key];else if (O[key]) simple = true;
+      } catch (error) {
+        /* empty */
+      }
+
+      if (simple) O[key] = value;else definePropertyModule$3.f(O, key, {
+        value: value,
+        enumerable: false,
+        configurable: !options.nonConfigurable,
+        writable: !options.nonWritable
+      });
     }
 
     return O;
@@ -1066,7 +1076,7 @@ var markerClusterer = (function (exports) {
 
   var global$4 = global$d;
   var getOwnPropertyDescriptor$1 = objectGetOwnPropertyDescriptor.f;
-  var createNonEnumerableProperty$1 = createNonEnumerableProperty$4;
+  var createNonEnumerableProperty$1 = createNonEnumerableProperty$3;
   var defineBuiltIn$2 = defineBuiltIn$3;
   var defineGlobalProperty = defineGlobalProperty$3;
   var copyConstructorProperties = copyConstructorProperties$1;
@@ -1891,7 +1901,7 @@ var markerClusterer = (function (exports) {
   var DOMIterables = domIterables;
   var DOMTokenListPrototype = domTokenListPrototype;
   var forEach = arrayForEach;
-  var createNonEnumerableProperty = createNonEnumerableProperty$4;
+  var createNonEnumerableProperty = createNonEnumerableProperty$3;
 
   var handlePrototype = function (CollectionPrototype) {
     // some Chrome versions have non-configurable methods on DOMTokenList
@@ -1924,6 +1934,43 @@ var markerClusterer = (function (exports) {
     }
   });
 
+  var fastDeepEqual = function equal(a, b) {
+    if (a === b) return true;
+
+    if (a && b && typeof a == 'object' && typeof b == 'object') {
+      if (a.constructor !== b.constructor) return false;
+      var length, i, keys;
+
+      if (Array.isArray(a)) {
+        length = a.length;
+        if (length != b.length) return false;
+
+        for (i = length; i-- !== 0;) if (!equal(a[i], b[i])) return false;
+
+        return true;
+      }
+
+      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
+      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
+      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
+      keys = Object.keys(a);
+      length = keys.length;
+      if (length !== Object.keys(b).length) return false;
+
+      for (i = length; i-- !== 0;) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
+
+      for (i = length; i-- !== 0;) {
+        var key = keys[i];
+        if (!equal(a[key], b[key])) return false;
+      }
+
+      return true;
+    } // true if both NaN, false otherwise
+
+
+    return a !== a && b !== b;
+  };
+
   /**
    * The default Grid algorithm historically used in Google Maps marker
    * clustering.
@@ -1952,17 +1999,56 @@ var markerClusterer = (function (exports) {
       _this.clusters = [];
       _this.maxDistance = maxDistance;
       _this.gridSize = gridSize;
+      _this.state = {
+        zoom: null
+      };
       return _this;
     }
 
     _createClass(GridAlgorithm, [{
-      key: "cluster",
-      value: function cluster(_ref) {
-        var _this2 = this;
-
+      key: "calculate",
+      value: function calculate(_ref) {
         var markers = _ref.markers,
             map = _ref.map,
             mapCanvasProjection = _ref.mapCanvasProjection;
+        var state = {
+          zoom: map.getZoom()
+        };
+        var changed = false;
+
+        if (this.state.zoom > this.maxZoom && state.zoom > this.maxZoom) ; else {
+          changed = !fastDeepEqual(this.state, state);
+        }
+
+        this.state = state;
+
+        if (map.getZoom() >= this.maxZoom) {
+          return {
+            clusters: this.noop({
+              markers: markers,
+              map: map,
+              mapCanvasProjection: mapCanvasProjection
+            }),
+            changed: changed
+          };
+        }
+
+        return {
+          clusters: this.cluster({
+            markers: filterMarkersToPaddedViewport(map, mapCanvasProjection, markers, this.viewportPadding),
+            map: map,
+            mapCanvasProjection: mapCanvasProjection
+          })
+        };
+      }
+    }, {
+      key: "cluster",
+      value: function cluster(_ref2) {
+        var _this2 = this;
+
+        var markers = _ref2.markers,
+            map = _ref2.map,
+            mapCanvasProjection = _ref2.mapCanvasProjection;
         this.clusters = [];
         markers.forEach(function (marker) {
           _this2.addToClosestCluster(marker, map, mapCanvasProjection);
@@ -2788,43 +2874,6 @@ var markerClusterer = (function (exports) {
   function getY(p) {
     return p.y;
   }
-
-  var fastDeepEqual = function equal(a, b) {
-    if (a === b) return true;
-
-    if (a && b && typeof a == 'object' && typeof b == 'object') {
-      if (a.constructor !== b.constructor) return false;
-      var length, i, keys;
-
-      if (Array.isArray(a)) {
-        length = a.length;
-        if (length != b.length) return false;
-
-        for (i = length; i-- !== 0;) if (!equal(a[i], b[i])) return false;
-
-        return true;
-      }
-
-      if (a.constructor === RegExp) return a.source === b.source && a.flags === b.flags;
-      if (a.valueOf !== Object.prototype.valueOf) return a.valueOf() === b.valueOf();
-      if (a.toString !== Object.prototype.toString) return a.toString() === b.toString();
-      keys = Object.keys(a);
-      length = keys.length;
-      if (length !== Object.keys(b).length) return false;
-
-      for (i = length; i-- !== 0;) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
-
-      for (i = length; i-- !== 0;) {
-        var key = keys[i];
-        if (!equal(a[key], b[key])) return false;
-      }
-
-      return true;
-    } // true if both NaN, false otherwise
-
-
-    return a !== a && b !== b;
-  };
 
   /**
    * A very fast JavaScript algorithm for geospatial point clustering using KD trees.
